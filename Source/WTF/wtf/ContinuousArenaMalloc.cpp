@@ -122,19 +122,44 @@ void ContinuousArenaMalloc::internalFree(void* ptr)
     dallocx(ptr, MALLOCX_TCACHE_NONE);
 }
 
-bool ContinuousArenaMalloc::isValidRange(void *addr,
-                                        size_t size)
+bool ContinuousArenaMalloc::isValidRange(void *addr, size_t size)
 {
     ASSERT(s_Mutex->tryLock() == false);
 
     ASSERT(s_Start != NULL);
-    ASSERT(s_End != NULL);
-    ASSERT(s_Current != NULL);
+    ASSERT(s_Current >= s_Start);
+    ASSERT(s_End >= s_Current);
 
-    return (s_Current >= s_Start
-            && s_Current <= s_End
-            && s_Current + size >= s_Start
-            && s_Current + size <= s_End);
+    uintptr_t start = reinterpret_cast<uintptr_t>(addr);
+    uintptr_t end = start + size;
+    if (end < start) {
+        return false;
+    }
+
+    uintptr_t valid_start = reinterpret_cast<uintptr_t>(s_Start);
+    uintptr_t valid_end = reinterpret_cast<uintptr_t>(s_End);
+
+#ifdef __CHERI_PURE_CAPABILITY__
+    ASSERT(cheri_tag_get(start));
+    ASSERT(cheri_tag_get(end));
+    ASSERT(cheri_tag_get(valid_start));
+    ASSERT(cheri_tag_get(valid_end));
+#endif
+
+    return (start >= valid_start) &&
+           (start <= valid_end) &&
+           (end >= valid_start) &&
+           (end <= valid_end);
+}
+
+bool ContinuousArenaMalloc::isAllocatedRange(void *addr, size_t size)
+{
+    return isValidRange(addr, size) && (reinterpret_cast<char *>(addr) + size <= s_Current);
+}
+
+bool ContinuousArenaMalloc::isAvailableRange(void *addr, size_t size)
+{
+    return isValidRange(addr, size) && (reinterpret_cast<char *>(addr) >= s_Current);
 }
 
 void* ContinuousArenaMalloc::extentAlloc(extent_hooks_t *extent_hooks,
@@ -163,7 +188,8 @@ void* ContinuousArenaMalloc::extentAlloc(extent_hooks_t *extent_hooks,
     } else {
         char *start = __builtin_align_up(s_Current, alignment);
 
-        if (!isValidRange(start, size)) {
+        // TODO: Pass `size` through round_representable_length.
+        if (!isAvailableRange(start, size)) {
             ret = NULL;
         } else {
             ret = mmap(start,
@@ -206,6 +232,7 @@ bool ContinuousArenaMalloc::extentDalloc(extent_hooks_t *extent_hooks,
               size,
               committed ? 'T' : 'F',
               arena_ind);
+    ASSERT(isAllocatedRange(addr, size));
 
     // opt-out from deallocation; jemalloc should re-use the area
     return true;
@@ -226,7 +253,7 @@ void ContinuousArenaMalloc::extentDestroy(extent_hooks_t *extent_hooks,
               committed ? 'T' : 'F',
               arena_ind);
 
-    ASSERT(isValidRange(addr, size));
+    ASSERT(isAllocatedRange(addr, size));
 
     void *ret = mmap(addr, size, PROT_NONE, MAP_GUARD | MAP_FIXED, -1, 0);
 
@@ -273,6 +300,8 @@ bool ContinuousArenaMalloc::extentDecommit(extent_hooks_t *extent_hooks,
               length,
               arena_ind);
 
+    ASSERT(isAllocatedRange(addr, size));
+
     // opt-out from decommit
     return true;
 }
@@ -294,12 +323,12 @@ bool ContinuousArenaMalloc::extentPurgeLazy(extent_hooks_t *extent_hooks,
               length,
               arena_ind);
 
-    ASSERT(isValidRange(addr, size));
-    ASSERT(length <= size);
+    ASSERT(isAllocatedRange(addr, size));
 
-    char *start = (char *)addr + offset;
-
-    ASSERT(isValidRange(start, length));
+    char *start = reinterpret_cast<char *>(addr) + offset;
+    ASSERT(start >= reinterpret_cast<char *>(addr));
+    ASSERT((start + length) <= (reinterpret_cast<char *>(addr) + size));
+    ASSERT(isAllocatedRange(start, length));
 
     void *ret = mmap(start,
                      length,
@@ -329,12 +358,12 @@ bool ContinuousArenaMalloc::extentPurgeForced(extent_hooks_t *extent_hooks,
               length,
               arena_ind);
 
-    ASSERT(isValidRange(addr, size));
-    ASSERT(length <= size);
+    ASSERT(isAllocatedRange(addr, size));
 
-    char *start = (char *)addr + offset;
-
-    ASSERT(isValidRange(start, length));
+    char *start = reinterpret_cast<char *>(addr) + offset;
+    ASSERT(start >= reinterpret_cast<char *>(addr));
+    ASSERT((start + length) <= (reinterpret_cast<char *>(addr) + size));
+    ASSERT(isAllocatedRange(start, length));
 
     void *ret = mmap(start,
                      length,
@@ -366,6 +395,8 @@ bool ContinuousArenaMalloc::extentSplit(extent_hooks_t *extent_hooks,
               committed ? 'T' : 'F',
               arena_ind);
 
+    ASSERT(isAllocatedRange(addr, size));
+
     // opt-out from splitting
     return true;
 }
@@ -388,6 +419,9 @@ bool ContinuousArenaMalloc::extentMerge(extent_hooks_t *extent_hooks,
               size_b,
               committed ? 'T' : 'F',
               arena_ind);
+
+    ASSERT(isAllocatedRange(addr_a, size_a));
+    ASSERT(isAllocatedRange(addr_b, size_b));
 
     // opt-out from merging
     return true;
