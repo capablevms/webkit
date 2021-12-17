@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019-2020,2022 Arm Ltd. All rights reserved.
+ * Copyright (C) 2019-2022 Arm Ltd. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -161,12 +161,12 @@ void* ContinuousArenaMalloc::extentAlloc(extent_hooks_t *extent_hooks,
     if (new_addr != NULL || size == 0) {
         ret = NULL;
     } else {
-        s_Current = __builtin_align_up(s_Current, alignment);
+        char *start = __builtin_align_up(s_Current, alignment);
 
-        if (!isValidRange(s_Current, size)) {
+        if (!isValidRange(start, size)) {
             ret = NULL;
         } else {
-            ret = mmap(s_Current,
+            ret = mmap(start,
                        size,
                        PROT_READ | PROT_WRITE,
                        MAP_ANON | MAP_PRIVATE | MAP_FIXED,
@@ -176,13 +176,13 @@ void* ContinuousArenaMalloc::extentAlloc(extent_hooks_t *extent_hooks,
                 ret = NULL;
             } else {
 #ifdef __CHERI_PURE_CAPABILITY__
-                ASSERT(__builtin_cheri_address_get(ret) == __builtin_cheri_address_get(s_Current));
+                ASSERT(__builtin_cheri_address_get(ret) == __builtin_cheri_address_get(start));
 #endif
 
                 *zero = true;
                 *commit = true;
 
-                s_Current += size;
+                s_Current = start + size;
             }
         }
     }
