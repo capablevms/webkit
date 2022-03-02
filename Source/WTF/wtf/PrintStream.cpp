@@ -207,7 +207,11 @@ void printInternal(PrintStream& out, __intcap_t value)
 
 void printInternal(PrintStream& out, RawPointer value)
 {
+#ifdef __CHERI_PURE_CAPABILITY__
+    out.printf("%#lp", value.value());
+#else
     out.printf("%p", value.value());
+#endif
 }
 
 void dumpCharacter(PrintStream& out, char value)
