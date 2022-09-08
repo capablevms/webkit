@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019-2020 Arm Ltd. All rights reserved.
+ * Copyright (C) 2019-2020,2022 Arm Ltd. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -47,18 +47,11 @@ void ContinuousArenaMalloc::initialize(void) {
     s_Mutex = new Mutex();
 
     void *area_start = mmap(NULL, k_AreaSize,
-                            PROT_READ | PROT_WRITE,
-                            MAP_ANON | MAP_PRIVATE | MAP_ALIGNED(k_LgAreaSize),
+                            PROT_NONE | PROT_MAX(PROT_READ | PROT_WRITE),
+                            MAP_GUARD | MAP_ALIGNED(k_LgAreaSize),
                             -1, 0);
 
     ASSERT(area_start != MAP_FAILED);
-
-    void *area_start_remapped = mmap(area_start, k_AreaSize,
-                                     PROT_NONE,
-                                     MAP_GUARD | MAP_FIXED,
-                                     -1, 0);
-
-    ASSERT(area_start == area_start_remapped);
 
     LOG_CHERI("initialize() - reserved %zu bytes starting from %p\n",
               k_AreaSize, area_start);
