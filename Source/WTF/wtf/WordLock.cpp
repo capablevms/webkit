@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2015-2017 Apple Inc. All rights reserved.
- * Copyright (C) 2019 Arm Ltd. All rights reserved.
+ * Copyright (C) 2019,2022 Arm Ltd. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -26,6 +26,10 @@
 
 #include "config.h"
 #include <wtf/WordLock.h>
+
+#ifdef __CHERI_PURE_CAPABILITY__
+#include <cheriintrin.h>
+#endif
 
 #include <condition_variable>
 #include <mutex>
@@ -130,14 +134,23 @@ NEVER_INLINE void WordLock::lockSlow()
 
             // Release the queue lock and install ourselves as the head. No need for a CAS loop, since
             // we own the queue lock.
+            // TODO: The load() result is only used for assertions, but the load itself has
+            // memory_order_seq_cst semantics that might be important. Verify and update
+            // accordingly.
             currentWordValue = m_word.load();
-            ASSERT(~(currentWordValue & ~queueHeadMask));
+            UNUSED_VARIABLE(currentWordValue);
+            ASSERT((currentWordValue & ~queueHeadMask) == 0);
             ASSERT(currentWordValue & isQueueLockedBit);
             ASSERT(currentWordValue & isLockedBit);
-            uintptr_t newWordValue = currentWordValue;
-            newWordValue |= bitwise_cast<uintptr_t>(queueHead);
-            newWordValue = Pointer::clearLowBits<isQueueLockedBit>(newWordValue);
+            uintptr_t newWordValue = bitwise_cast<uintptr_t>(queueHead);
+            COMPILE_ASSERT(isLockedBit | isQueueLockedBit == queueHeadMask, "");
+            ASSERT(Pointer::getLowBits<queueHeadMask>(newWordValue) == 0);
+            newWordValue = Pointer::setLowBits(newWordValue, isLockedBit);
             m_word.store(newWordValue);
+
+#ifdef __CHERI_PURE_CAPABILITY__
+            ASSERT(cheri_tag_get(newWordValue));
+#endif
         }
 
         // At this point everyone who acquires the queue lock will see me on the queue, and anyone who
@@ -216,16 +229,23 @@ NEVER_INLINE void WordLock::unlockSlow()
     // Change the queue head, possibly removing it if newQueueHead is null. No need for a CAS loop,
     // since we hold the queue lock and the lock itself so nothing about the lock can change right
     // now.
+    // TODO: The load() result is only used for assertions, but the load itself has
+    // memory_order_seq_cst semantics that might be important. Verify and update accordingly.
     currentWordValue = m_word.load();
+    UNUSED_VARIABLE(currentWordValue);
     ASSERT(currentWordValue & isLockedBit);
     ASSERT(currentWordValue & isQueueLockedBit);
     ASSERT((currentWordValue & ~queueHeadMask) == bitwise_cast<uintptr_t>(queueHead));
-    uintptr_t newWordValue = currentWordValue;
-    newWordValue = Pointer::clearLowBits<isLockedBit>(newWordValue); // Release the WordLock.
-    newWordValue = Pointer::clearLowBits<isQueueLockedBit>(newWordValue); // Release the queue lock.
-    newWordValue = Pointer::getLowBits<queueHeadMask>(newWordValue); // Clear out the old queue head.
-    newWordValue |= bitwise_cast<uintptr_t>(newQueueHead); // Install new queue head.
+    uintptr_t newWordValue = bitwise_cast<uintptr_t>(newQueueHead);
+    COMPILE_ASSERT(isLockedBit | isQueueLockedBit == queueHeadMask, "");
+    ASSERT(Pointer::getLowBits<queueHeadMask>(newWordValue) == 0);
     m_word.store(newWordValue);
+
+#ifdef __CHERI_PURE_CAPABILITY__
+    // newWordValue could be nullptr if it is the last entry on the queue.
+    // Otherwise, make sure that we didn't invalidate the capability.
+    ASSERT(!newWordValue || cheri_tag_get(newWordValue));
+#endif
 
     // Now the lock is available for acquisition. But we just have to wake up the old queue head.
     // After that, we're done!
