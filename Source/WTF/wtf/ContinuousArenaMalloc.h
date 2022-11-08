@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2019-2020 Arm Ltd. All rights reserved.
+ *  Copyright (C) 2019-2021 Arm Ltd. All rights reserved.
  *
  *  This library is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU Library General Public
@@ -131,7 +131,13 @@ private:
     static void* internalReallocate(void *p, size_t size);
     static void internalFree(void* ptr);
 
+    // True iff [addr, addr+size) is a subset of or equal to [s_Start, s_End).
     static bool isValidRange(void *addr, size_t size);
+    // True iff [addr, addr+size) is a subset of or equal to [s_Start, s_Current).
+    static bool isAllocatedRange(void *addr, size_t size);
+    // True iff [addr, addr+size) is a subset of or equal to [s_Current, s_End).
+    static bool isAvailableRange(void *addr, size_t size);
+
     static void* extentAlloc(extent_hooks_t *extent_hooks,
                              void *new_addr,
                              size_t size,
@@ -139,28 +145,17 @@ private:
                              bool *zero,
                              bool *commit,
                              unsigned arena_ind);
-    static bool extentDalloc(extent_hooks_t *extent_hooks,
-                             void *addr,
-                             size_t size,
-                             bool committed,
-                             unsigned arena_ind);
     static void extentDestroy(extent_hooks_t *extent_hooks,
                               void *addr,
                               size_t size,
                               bool committed,
                               unsigned arena_ind);
-    static bool extentCommit(extent_hooks_t *extent_hooks,
-                             void *addr,
-                             size_t size,
-                             size_t offset,
-                             size_t length,
-                             unsigned arena_ind);
-    static bool extentDecommit(extent_hooks_t *extent_hooks,
-                               void *addr,
-                               size_t size,
-                               size_t offset,
-                               size_t length,
-                               unsigned arena_ind);
+    static bool extentPurgeCommon(extent_hooks_t *extent_hooks,
+                                  void *addr,
+                                  size_t size,
+                                  size_t offset,
+                                  size_t length,
+                                  unsigned arena_ind);
     static bool extentPurgeLazy(extent_hooks_t *extent_hooks,
                                 void *addr,
                                 size_t size,
@@ -173,20 +168,6 @@ private:
                                   size_t offset,
                                   size_t length,
                                   unsigned arena_ind);
-    static bool extentSplit(extent_hooks_t *extent_hooks,
-                            void *addr,
-                            size_t size,
-                            size_t size_a,
-                            size_t size_b,
-                            bool committed,
-                            unsigned arena_ind);
-    static bool extentMerge(extent_hooks_t *extent_hooks,
-                            void *addr_a,
-                            size_t size_a,
-                            void *addr_b,
-                            size_t size_b,
-                            bool committed,
-                            unsigned arena_ind);
 
     static bool s_Initialized;
     static unsigned int s_arenaIndex;
