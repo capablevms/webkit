@@ -268,11 +268,10 @@ bool ContinuousArenaMalloc::extentPurgeCommon(extent_hooks_t *extent_hooks,
 
     ASSERT(s_Mutex->tryLock() == false);
 
+    ASSERT(offset <= size);
+    ASSERT((offset + length) <= size);
     ASSERT(isAllocatedRange(addr, size));
-
     char *start = reinterpret_cast<char *>(addr) + offset;
-    ASSERT(start >= reinterpret_cast<char *>(addr));
-    ASSERT((start + length) <= (reinterpret_cast<char *>(addr) + size));
     ASSERT(isAllocatedRange(start, length));
 
     void *ret = mmap(start,
