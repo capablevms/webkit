@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2012-2019 Apple Inc. All rights reserved.
- * Copyright (C) 2020 Arm Ltd. All rights reserved.
+ * Copyright (C) 2020,2022 Arm Ltd. All rights reserved.
  * Copyright (C) 2020 Brett F. Gutstein. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -1193,13 +1193,24 @@ public:
     ALWAYS_INLINE void ldr_literal(RegisterID rt, int offset = 0)
     {
         CHECK_DATASIZE_ALLOW_CAP();
-        ASSERT(!(offset & 3));
 #if CPU(ARM64_CAPS)
         if (DATASIZE == Datasize_Cap) {
+            // Callers need to ensure that the capability literal is aligned in
+            // memory, but should provide the real `offset` from the load to the
+            // literal, as for any other ldr_literal form.
+            //
+            // We can only actually encode a 16-byte-aligned offset, but the
+            // instruction always aligns (down) the computed address, we can
+            // adjust `offset` here to compensate.
+
+            // Verify that the literal is correctly aligned.
+            ASSERT(((buffer().codeSize() + offset) % sizeof(__intcap_t)) == 0);
+            offset += buffer().codeSize() % sizeof(__intcap_t);
             insn(loadRegisterLiteralCap(encodeLoadRegisterLiteralCapImmediate(offset), rt));
             return;
         }
 #endif
+        ASSERT(!(offset & 3));
         insn(loadRegisterLiteral(datasize == 64 ? LdrLiteralOp_64BIT : LdrLiteralOp_32BIT, false, offset >> 2, rt));
     }
 
