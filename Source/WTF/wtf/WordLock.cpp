@@ -143,7 +143,7 @@ NEVER_INLINE void WordLock::lockSlow()
             ASSERT(currentWordValue & isQueueLockedBit);
             ASSERT(currentWordValue & isLockedBit);
             uintptr_t newWordValue = bitwise_cast<uintptr_t>(queueHead);
-            COMPILE_ASSERT(isLockedBit | isQueueLockedBit == queueHeadMask, "");
+            COMPILE_ASSERT((isLockedBit | isQueueLockedBit) == queueHeadMask, "");
             ASSERT(Pointer::getLowBits<queueHeadMask>(newWordValue) == 0);
             newWordValue = Pointer::setLowBits(newWordValue, isLockedBit);
             m_word.store(newWordValue);
@@ -237,7 +237,7 @@ NEVER_INLINE void WordLock::unlockSlow()
     ASSERT(currentWordValue & isQueueLockedBit);
     ASSERT((currentWordValue & ~queueHeadMask) == bitwise_cast<uintptr_t>(queueHead));
     uintptr_t newWordValue = bitwise_cast<uintptr_t>(newQueueHead);
-    COMPILE_ASSERT(isLockedBit | isQueueLockedBit == queueHeadMask, "");
+    COMPILE_ASSERT((isLockedBit | isQueueLockedBit) == queueHeadMask, "");
     ASSERT(Pointer::getLowBits<queueHeadMask>(newWordValue) == 0);
     m_word.store(newWordValue);
 
