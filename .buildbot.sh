@@ -9,6 +9,7 @@ set -eu
 CHERI_DIR="${CHERI_DIR-$HOME/cheri/output}"
 CHERIBUILD_DIR="${CHERIBUILD_DIR-$HOME/cheri-build}"
 WEBKIT_DIR="${REPO_DIR-$PWD}"
+cd "$WEBKIT_DIR"
 
 CHERI_RO_DIR="$(dirname "$CHERI_DIR")"  # E.g. ~/cheri
 
@@ -44,7 +45,9 @@ echo "Symlinking WebKit test subject into the CHERI root: $CHERI_RW_DIR/webkit -
 ln -fsT "$WEBKIT_DIR" "$CHERI_RW_DIR/webkit"
 
 # It's useful to see (roughly) what was copied in CI logs.
+echo "---- $CHERI_RW_DIR ----"
 ls -l "$CHERI_RW_DIR"
+echo "---- $CHERI_RW_DIR/output ----"
 ls -l "$CHERI_RW_DIR/output"
 
 TARGET_FILES_DIR="$BUILDBOT_SCRATCH_DIR/target_files"
