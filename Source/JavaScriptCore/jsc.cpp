@@ -194,36 +194,6 @@ NO_RETURN_WITH_VALUE static void jscExit(int status)
     exit(status);
 }
 
-#if ENABLE(C_LOOP)
-#define CHERI_VERSION_BACKEND "cloop"
-#elif ENABLE(ASSEMBLER) && !ENABLE(JIT)
-#define CHERI_VERSION_BACKEND "tier 1 (llint)"
-#elif ENABLE(JIT)
-#define CHERI_VERSION_BACKEND "tier 2 (baseline jit)"
-#else
-#define CHERI_VERSION_BACKEND "unknown backend"
-#endif
-
-#if ENABLE(MASM_PROBE)
-#define CHERI_VERSION_MASM_PROBE "masm-probe"
-#else
-#define CHERI_VERSION_MASM_PROBE ""
-#endif
-
-#if ENABLE(JSHEAP_CHERI_OFFSET_REFS)
-#define CHERI_VERSION_HEAP_OFFSET "heap-offsets"
-#else
-#define CHERI_VERSION_HEAP_OFFSET ""
-#endif
-
-#ifdef __CHERI_PURE_CAPABILITY__
-#define CHERI_VERSION_FLAVOR "purecap"
-#elif __has_feature(capabilities)
-#define CHERI_VERSION_FLAVOR "hybrid"
-#else
-#define CHERI_VERSION_FLAVOR ""
-#endif
-
 class Masquerader : public JSNonFinalObject {
 public:
     Masquerader(VM& vm, Structure* structure)
@@ -3019,7 +2989,31 @@ void CommandLine::parseArguments(int argc, char** argv)
 template<typename Func>
 int runJSC(const CommandLine& options, bool isWorker, const Func& func)
 {
-    printf("CHERI-jsc " CHERI_VERSION_FLAVOR " " CHERI_VERSION_BACKEND " " CHERI_VERSION_MASM_PROBE " " CHERI_VERSION_HEAP_OFFSET " \n");
+    printf("CHERI-jsc"
+#ifdef __CHERI_PURE_CAPABILITY__
+           " purecap"
+#elif __has_feature(capabilities)
+           " hybrid"
+#endif
+
+#if ENABLE(C_LOOP)
+           " cloop"
+#elif ENABLE(ASSEMBLER) && !ENABLE(JIT)
+           " tier 1 (llint)"
+#elif ENABLE(JIT)
+           " tier 2 (baseline jit)"
+#else
+           " unknown backend"
+#endif
+
+#if ENABLE(MASM_PROBE)
+           ", with masm-probe"
+#endif
+
+#if ENABLE(JSHEAP_CHERI_OFFSET_REFS)
+           ", with heap-offset references"
+#endif
+           "\n");
 
     Worker worker(Workers::singleton());
 
