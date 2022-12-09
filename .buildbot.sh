@@ -54,57 +54,81 @@ cp .buildbot-test.sh "$TARGET_FILES_DIR"/test.sh
 chmod +x "$TARGET_FILES_DIR"/test.sh
 
 build() {
-  ARCH="$1"
+  TARGET_SUFFIX="$1"
   shift
-  # Flatten the build configuration to form a unique destination directory.
-  local FLAT=$(echo "$*" |
-               sed "s/\(.\+\)/\L\1/g;       # Lower case
-                    s/--morello-webkit\///g;
-                    s/\s\+/_/g;
-                    s/[^a-z0-9_-]//g;"
+
+  local CHERIBUILD_ARGS=(
+    "--source-root=\"$CHERI_RW_DIR\""
+    '--skip-update'
   )
-  local OUTDIR="$(realpath "$TARGET_FILES_DIR"/builds/$FLAT)"
+
+  case "$TARGET_SUFFIX" in
+    morello-purecap)
+      local FS_TYPE="morello-purecap"
+      local BUILD_TYPE="morello-purecap"
+      ;;
+    morello-hybrid-for-purecap-rootfs)
+      local FS_TYPE="morello-purecap"
+      local BUILD_TYPE="morello-hybrid"
+      CHERIBUILD_ARGS+=('--enable-hybrid-for-purecap-rootfs-targets')
+      ;;
+    *)
+      echo "Unhandled TARGET_SUFFIX: $TARGET_SUFFIX"
+      exit 1
+      ;;
+  esac
+
+  # Flatten the build configuration to form a unique destination directory.
+  local FLAT="${BUILD_TYPE}_$(echo "$*" |
+                              sed "s/\(.\+\)/\L\1/g;       # Lower case
+                                   s/--morello-webkit\///g;
+                                   s/\s\+/_/g;
+                                   s/[^a-z0-9_-]//g;")"
+
   pushd "$CHERIBUILD_DIR"
 
   # We use 'script' (below) to make cheribuild think that it has an interactive
   # shell. This isn't ideal, but cheribuild otherwise hangs with SIGTTOU on
   # consecutive calls: https://github.com/CTSRD-CHERI/cheribuild/issues/182
   # TODO: Once the cheribuild bug is fixed, remove this workaround.
-
   cheribuild() {
-    echo "Building: ./cheribuild.py --source-root=\"$CHERI_RW_DIR\" --skip-update $*"
-    script -qec "./cheribuild.py --source-root=\"$CHERI_RW_DIR\" --skip-update $*" /dev/null
+    echo "Building: ./cheribuild.py ${CHERIBUILD_ARGS[*]} $*"
+    script -qec "./cheribuild.py ${CHERIBUILD_ARGS[*]} $*" /dev/null
   }
 
   cheribuild "icu4c-native"
-  cheribuild "icu4c-$ARCH"
+  cheribuild "icu4c-$TARGET_SUFFIX"
   # --clean and/or --reconfigure are sometimes required when building different
   # configurations in sequence.
-  cheribuild --clean --reconfigure morello-webkit-$ARCH "$@"
+  cheribuild --clean --reconfigure morello-webkit-$TARGET_SUFFIX "$@"
 
-  local FSROOT="$CHERI_RW_DIR"/output/rootfs-$ARCH
+  local FSROOT="$CHERI_RW_DIR"/output/rootfs-$FS_TYPE
 
   echo "Build complete."
+  local OUTDIR="$(realpath "$TARGET_FILES_DIR"/builds)/$FLAT"
   mkdir "$OUTDIR"
   mkdir "$OUTDIR/bin"
   mkdir "$OUTDIR/lib"
-  cp -a -t "$OUTDIR/bin" "$FSROOT"/opt/$ARCH/webkit/bin/*
-  cp -a -t "$OUTDIR/lib" "$FSROOT"/opt/$ARCH/webkit/lib/*
-  cp -a -t "$OUTDIR/lib" "$FSROOT"/usr/local/$ARCH/lib/libicu*
+  cp -a -t "$OUTDIR/bin" "$FSROOT"/opt/"$BUILD_TYPE"/webkit/bin/*
+  cp -a -t "$OUTDIR/lib" "$FSROOT"/opt/"$BUILD_TYPE"/webkit/lib/*
+  cp -a -t "$OUTDIR/lib" "$FSROOT"/usr/local/"$BUILD_TYPE"/lib/libicu*
   popd
 }
 
-export PYTHONPATH="$CHERIBUILD_DIR"/test-scripts
-
-# Configurations to test.
-echo "Building & testing morello-purecap..."
 build morello-purecap --morello-webkit/build-type Debug --morello-webkit/backend cloop
 build morello-purecap --morello-webkit/build-type Debug --morello-webkit/backend tier1asm
 # TODO: tier2asm shows intermittent failures, which are currently under
 # investigation. To avoid CI disruption, it is disabled here for now, but
 # should be enabled once the failures are resolved.
-#build --morello-webkit/build-type Debug --morello-webkit/backend tier2asm
+#build morello-purecap --morello-webkit/build-type Debug --morello-webkit/backend tier2asm
+
+# Skip cloop hybrid because it takes ~10 hours to run.
+build morello-hybrid-for-purecap-rootfs --morello-webkit/build-type Debug --morello-webkit/backend tier1asm
+build morello-hybrid-for-purecap-rootfs --morello-webkit/build-type Debug --morello-webkit/backend tier2asm
+
 # TODO: Also test other variations (e.g. --morello-webkit/jsheapoffsets).
+
+export PYTHONPATH="$CHERIBUILD_DIR"/test-scripts
 python3 .buildbot-run-and-test.py                                       \
     --architecture morello-purecap                                      \
     --qemu-cmd "$CHERI_RO_DIR"/output/sdk/bin/qemu-system-morello       \
@@ -112,6 +136,3 @@ python3 .buildbot-run-and-test.py                                       \
     --disk-image "$CHERI_RO_DIR"/output/cheribsd-morello-purecap.img    \
     --build-dir "$TARGET_FILES_DIR"                                     \
     --ssh-port 10042
-
-# TODO: JSC supports morello-hybrid, but cheribuild lacks targets for it. We
-# should add them, and enable corresponding tests here.
