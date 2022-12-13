@@ -29,9 +29,10 @@ for build in $(ls -r builds/); do
     echo "==== $ss on $build ===="
     while read name; do
       js="$ss/$name.js"
-      lib_path="builds/$build${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-      echo "Running: LD_LIBRARY_PATH=\"$lib_path\" \"builds/$build/bin/jsc\" \"$js\""
-      if LD_LIBRARY_PATH="$lib_path" "builds/$build/bin/jsc" "$js"; then
+      # Recent cheribuilds produce jsc binaries with RUNPATH set, so we don't
+      # need to specify the library path.
+      echo "Running: \"builds/$build/bin/jsc\" \"$js\""
+      if "builds/$build/bin/jsc" "$js"; then
         echo "  - PASS" >&2
       else
         failures="${failures}  - $build: $ss/$name\n"
