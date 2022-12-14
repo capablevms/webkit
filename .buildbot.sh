@@ -158,6 +158,9 @@ build morello-hybrid-for-purecap-rootfs --morello-webkit/build-type Debug --more
 
 # TODO: Also test other variations (e.g. --morello-webkit/jsheapoffsets).
 
+echo "TARGET_FILES_DIR:"
+tree -h --du "$TARGET_FILES_DIR"
+
 timestamp "Running tests..."
 export PYTHONPATH="$CHERIBUILD_DIR"/test-scripts
 python3 .buildbot-run-and-test.py                                       \
