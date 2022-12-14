@@ -5,6 +5,32 @@
 
 set -eu
 
+# Buildbot respects ANSI colours.
+C_BOLD="\033[1m"
+C_RESET="\033[m"
+
+timestamp() {
+  local DELTA=''
+  if [ -n "${TIMESTAMP:-}" ]; then
+    local NEW_TIMESTAMP="$(date +%s)"
+    local TOTAL_S="$(( $NEW_TIMESTAMP - $TIMESTAMP ))"
+    # Show time taken for long-running commands (>1m).
+    local S="$(( TOTAL_S % 60 ))s"
+    if (( $TOTAL_S >= 60 )); then
+      local M="$(( (TOTAL_S / 60) % 60 ))m"
+      if (( $TOTAL_S >= 3600 )); then
+        local H="$(( TOTAL_S / 3600 ))h"
+      fi
+      DELTA=" (took ${H-}${M-}$S)"
+    fi
+    TIMESTAMP="$NEW_TIMESTAMP"
+  else
+    TIMESTAMP="$(date +%s)"
+  fi
+  echo -e "$C_BOLD$(date --date="@$TIMESTAMP" "+%H:%M:%S$DELTA")$C_RESET: $@"
+}
+timestamp "Entered $0."
+
 # Standard buildbot variables.
 CHERI_DIR="${CHERI_DIR-$HOME/cheri/output}"
 CHERIBUILD_DIR="${CHERIBUILD_DIR-$HOME/cheri-build}"
@@ -14,11 +40,12 @@ cd "$WEBKIT_DIR"
 CHERI_RO_DIR="$(dirname "$CHERI_DIR")"  # E.g. ~/cheri
 
 BUILDBOT_SCRATCH_DIR=$(mktemp -d --tmpdir -t .buildbot-scratch-XXXXXX)
-echo "Using temporary directory: $BUILDBOT_SCRATCH_DIR"
+timestamp "Using temporary directory: $BUILDBOT_SCRATCH_DIR"
 cleanup() {
-  echo "Cleaning up: $BUILDBOT_SCRATCH_DIR"
+  timestamp "Cleaning up: $BUILDBOT_SCRATCH_DIR"
   rm -rf "$BUILDBOT_SCRATCH_DIR"
   trap '' INT TERM EXIT
+  timestamp "Done!"
   exit
 }
 trap cleanup INT TERM EXIT
@@ -29,7 +56,7 @@ trap cleanup INT TERM EXIT
 #
 # TODO: Consider using symlinks to sub-trees that only need to be read-only.
 CHERI_RW_DIR="$BUILDBOT_SCRATCH_DIR/cheri"
-echo "Copying $CHERI_RO_DIR to $CHERI_RW_DIR..."
+timestamp "Copying $CHERI_RO_DIR to $CHERI_RW_DIR..."
 RULES=(
   '--include=/output/'
   '--include=/icu/'     # ICU probably isn't present, but we'll take it if it is.
@@ -41,7 +68,7 @@ RULES=(
 )
 rsync -a --chmod=u+w "$CHERI_RO_DIR/" "$CHERI_RW_DIR" "${RULES[@]}"
 
-echo "Symlinking WebKit test subject into the CHERI root: $CHERI_RW_DIR/webkit -> $WEBKIT_DIR"
+timestamp "Symlinking WebKit test subject into the CHERI root: $CHERI_RW_DIR/webkit -> $WEBKIT_DIR"
 ln -fsT "$WEBKIT_DIR" "$CHERI_RW_DIR/webkit"
 
 # It's useful to see (roughly) what was copied in CI logs.
@@ -95,7 +122,7 @@ build() {
   # consecutive calls: https://github.com/CTSRD-CHERI/cheribuild/issues/182
   # TODO: Once the cheribuild bug is fixed, remove this workaround.
   cheribuild() {
-    echo "Building: ./cheribuild.py ${CHERIBUILD_ARGS[*]} $*"
+    timestamp "Building: ./cheribuild.py ${CHERIBUILD_ARGS[*]} $*"
     script -qec "./cheribuild.py ${CHERIBUILD_ARGS[*]} $*" /dev/null
   }
 
@@ -107,8 +134,8 @@ build() {
 
   local FSROOT="$CHERI_RW_DIR"/output/rootfs-$FS_TYPE
 
-  echo "Build complete."
   local OUTDIR="$(realpath "$TARGET_FILES_DIR"/builds)/$FLAT"
+  timestamp "Build complete. Copying files to $OUTDIR..."
   mkdir "$OUTDIR"
   mkdir "$OUTDIR/bin"
   mkdir "$OUTDIR/lib"
@@ -131,6 +158,7 @@ build morello-hybrid-for-purecap-rootfs --morello-webkit/build-type Debug --more
 
 # TODO: Also test other variations (e.g. --morello-webkit/jsheapoffsets).
 
+timestamp "Running tests..."
 export PYTHONPATH="$CHERIBUILD_DIR"/test-scripts
 python3 .buildbot-run-and-test.py                                       \
     --architecture morello-purecap                                      \
@@ -139,3 +167,4 @@ python3 .buildbot-run-and-test.py                                       \
     --disk-image "$CHERI_RO_DIR"/output/cheribsd-morello-purecap.img    \
     --build-dir "$TARGET_FILES_DIR"                                     \
     --ssh-port 10042
+timestamp "Tests complete."
