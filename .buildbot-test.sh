@@ -21,6 +21,11 @@
 #   +-- sunspider-1.0.1
 #       ...
 
+echo "$PWD:"
+du -hs *
+echo "$PWD/builds:"
+du -hs builds/*
+
 failures=''
 # Run higher tiers first (ls -r). They are most complicated, most likely to
 # receive development, and run a lot faster than lower tiers.
