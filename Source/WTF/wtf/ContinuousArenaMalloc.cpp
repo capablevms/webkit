@@ -111,13 +111,25 @@ void *ContinuousArenaMalloc::internalAllocateAligned(size_t alignment,
     ASSERT((alignment & (alignment - 1)) == 0);
     ASSERT(s_Initialized);
 
-    return mallocx(size, MALLOCX_ALIGN(alignment) | MALLOCX_TCACHE_NONE | MALLOCX_ARENA(s_arenaIndex));
+    void * result = mallocx(size, MALLOCX_ALIGN(alignment) | MALLOCX_TCACHE_NONE | MALLOCX_ARENA(s_arenaIndex));
+#if __has_feature(capabilities)
+    // If this happens, try disabling capability revocation.
+    // See: https://github.com/CTSRD-CHERI/cheribsd/issues/1964
+    ASSERT(cheri_is_aligned(result, alignment));
+#endif
+    return result;
 }
 
 void *ContinuousArenaMalloc::internalReallocate(void *ptr, size_t size)
 {
     ASSERT(s_Initialized);
-    return rallocx(ptr, size, MALLOCX_TCACHE_NONE | MALLOCX_ARENA(s_arenaIndex));
+    void * result = rallocx(ptr, size, MALLOCX_TCACHE_NONE | MALLOCX_ARENA(s_arenaIndex));
+#if __has_feature(capabilities)
+    // If this happens, try disabling capability revocation.
+    // See: https://github.com/CTSRD-CHERI/cheribsd/issues/1964
+    ASSERT(cheri_is_aligned(result, size));
+#endif
+    return result;
 }
 
 void ContinuousArenaMalloc::internalFree(void *ptr)
