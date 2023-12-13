@@ -145,7 +145,9 @@ build() {
   popd
 }
 
-build morello-purecap --morello-webkit/build-type Debug --morello-webkit/backend cloop
+# TODO: 'cloop' is disabled because it's slow, and takes longer than the Merge
+# Queues timeout. We should reinstate it, perhaps as a weekly run or similar.
+#build morello-purecap --morello-webkit/build-type Debug --morello-webkit/backend cloop
 build morello-purecap --morello-webkit/build-type Debug --morello-webkit/backend tier1asm
 # TODO: tier2asm shows intermittent failures, which are currently under
 # investigation. To avoid CI disruption, it is disabled here for now, but
