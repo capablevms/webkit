@@ -113,9 +113,19 @@ void *ContinuousArenaMalloc::internalAllocateAligned(size_t alignment,
 
     void * result = mallocx(size, MALLOCX_ALIGN(alignment) | MALLOCX_TCACHE_NONE | MALLOCX_ARENA(s_arenaIndex));
 #if __has_feature(capabilities)
-    // If this happens, try disabling capability revocation.
+    // If either of these fail, try disabling capability revocation.
     // See: https://github.com/CTSRD-CHERI/cheribsd/issues/1964
     ASSERT(cheri_is_aligned(result, alignment));
+#ifdef __CHERI_PURE_CAPABILITY__
+    ASSERT(cheri_is_subset(result, cheri_ddc_get()));
+#elif !defined(ASSERT_DISABLED)
+    uintptr_t addr = reinterpret_cast<uintptr_t>(result);
+    uintptr_t ddc_base = cheri_base_get(cheri_ddc_get());
+    uintptr_t ddc_len = ddc_base + cheri_length_get(cheri_ddc_get());
+    ASSERT(addr >= ddc_base);
+    ASSERT(size <= ddc_len);
+    ASSERT((addr + size) <= (ddc_base + ddc_len));
+#endif
 #endif
     return result;
 }
@@ -125,9 +135,19 @@ void *ContinuousArenaMalloc::internalReallocate(void *ptr, size_t size)
     ASSERT(s_Initialized);
     void * result = rallocx(ptr, size, MALLOCX_TCACHE_NONE | MALLOCX_ARENA(s_arenaIndex));
 #if __has_feature(capabilities)
-    // If this happens, try disabling capability revocation.
+    // If either of these fail, try disabling capability revocation.
     // See: https://github.com/CTSRD-CHERI/cheribsd/issues/1964
     ASSERT(cheri_is_aligned(result, size));
+#ifdef __CHERI_PURE_CAPABILITY__
+    ASSERT(cheri_is_subset(result, cheri_ddc_get()));
+#elif !defined(ASSERT_DISABLED)
+    uintptr_t addr = reinterpret_cast<uintptr_t>(result);
+    uintptr_t ddc_base = cheri_base_get(cheri_ddc_get());
+    uintptr_t ddc_len = ddc_base + cheri_length_get(cheri_ddc_get());
+    ASSERT(addr >= ddc_base);
+    ASSERT(size <= ddc_len);
+    ASSERT((addr + size) <= (ddc_base + ddc_len));
+#endif
 #endif
     return result;
 }
