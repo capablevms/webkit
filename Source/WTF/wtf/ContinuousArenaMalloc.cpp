@@ -50,6 +50,12 @@ void ContinuousArenaMalloc::initialize(void) {
 
     s_Mutex = new Mutex();
 
+#if __has_feature(capabilities)
+    // CheriBSD revocation does not support MALLOCX_ARENA.
+    // See: https://man.cheribsd.org/cgi-bin/man.cgi/mrs
+    ASSERT(!malloc_is_revoking());
+#endif
+
     void *area_start = mmap(NULL, k_AreaSize,
                             PROT_NONE | PROT_MAX(PROT_READ | PROT_WRITE),
                             MAP_GUARD | MAP_ALIGNED(k_LgAreaSize),
