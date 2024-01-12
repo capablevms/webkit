@@ -46,7 +46,7 @@ public:
     }
 
     static void* realloc(void* p, size_t size) {
-        void *ret = internalReallocate(p, size);
+        void *ret = tryRealloc(p, size);
 
         if (!ret) {
             CRASH();
@@ -72,7 +72,7 @@ public:
     }
 
     static void* tryRealloc(void* p, size_t size) {
-        return internalReallocate(p, size);
+        return internalReallocateAligned(p, sizeof(void *), size);
     }
 
     static bool isWithin(size_t non_cap_ptr) {
@@ -128,7 +128,7 @@ private:
 #endif
 
     static void* internalAllocateAligned(size_t alignment, size_t size);
-    static void* internalReallocate(void *p, size_t size);
+    static void* internalReallocateAligned(void *p, size_t alignment, size_t size);
     static void internalFree(void* ptr);
 
     // True iff [addr, addr+size) is a subset of or equal to [s_Start, s_End).
