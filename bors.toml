@@ -1,6 +1,0 @@
-status = ["buildbot/ci-builder"]
-delete_merged_branches = true
-cut_body_after = ""
-# A full run should complete within 12 hours, but we might add other
-# configurations to it later, so add a little leeway.
-timeout_sec = 86400 # 24 hours

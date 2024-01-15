@@ -26,6 +26,9 @@ du -hs *
 echo "$PWD/builds:"
 du -hs builds/*
 
+echo "Disabling revocation to work around https://github.com/CTSRD-CHERI/cheribsd/issues/1964"
+sysctl security.cheri.runtime_revocation_default=0
+
 failures=''
 # Run higher tiers first (ls -r). They are most complicated, most likely to
 # receive development, and run a lot faster than lower tiers.
